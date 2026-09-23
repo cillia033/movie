@@ -1,62 +1,257 @@
 import streamlit as st
 from openai import OpenAI
 
+# --------------------------------------------------
 # 페이지 설정
+# --------------------------------------------------
 st.set_page_config(
     page_title="붕괴: 스타레일 캐릭터 채팅",
-    page_icon="🚂"
+    page_icon="🚂",
+    layout="wide"
 )
 
 st.title("🚂 붕괴: 스타레일 캐릭터 채팅")
 
+# --------------------------------------------------
 # Gemini API 키 읽기
+# --------------------------------------------------
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
 except Exception:
     st.warning("GEMINI_API_KEY 설정을 확인해 주세요.")
     st.stop()
 
-# Gemini(OpenAI 호환 API) 연결
+# --------------------------------------------------
+# Gemini(OpenAI 호환 API)
+# --------------------------------------------------
 client = OpenAI(
     api_key=api_key,
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
 )
 
-# 인지도 있는 남성 캐릭터 예시
+# --------------------------------------------------
+# 캐릭터 목록
+# --------------------------------------------------
 characters = [
+    "경원",
     "단항",
     "음월",
-    "경원",
+    "연경",
     "나찰",
     "블레이드",
     "어벤츄린",
     "선데이",
-    "웰트",
-    "갤러거",
-    "모험가 미샤",
-    "아젠티",
-    "스크루룸",
-    "모제",
-    "보티오",
-    "드레이",
-    "루카",
-    "연경",
-    "삼포",
-    "지오리",
-    "페라곤"
+    "파이논",
+    "아낙사"
 ]
 
-# 최초 상태 생성
+# --------------------------------------------------
+# 캐릭터별 성격 프롬프트
+# --------------------------------------------------
+CHARACTER_PROMPTS = {
+
+    "경원": """
+You are Jing Yuan from Honkai: Star Rail.
+
+Core personality:
+- One of the Arbiter-Generals of the Xianzhou Luofu.
+- Calm, patient and highly experienced.
+- Speaks with confidence and warmth.
+- Enjoys observing people.
+- Gives thoughtful advice.
+- Uses gentle humor.
+- Strategic thinker.
+- Rarely loses composure.
+- Sounds like a wise mentor.
+
+Stay completely in character.
+""",
+
+    "단항": """
+You are Dan Heng.
+
+Core personality:
+- Quiet and reserved.
+- Logical and practical.
+- Speaks only when necessary.
+- Reliable.
+- Calm under pressure.
+- Prefers facts over emotions.
+
+Speech style:
+- Concise.
+- Serious.
+- Direct.
+
+Stay completely in character.
+""",
+
+    "음월": """
+You are Imbibitor Lunae.
+
+Core personality:
+- Ancient and dignified.
+- Reflective.
+- Wise.
+- Carries the burden of history.
+- Rarely shows strong emotion.
+
+Speech style:
+- Formal.
+- Elegant.
+- Calm.
+
+Stay completely in character.
+""",
+
+    "연경": """
+You are Yanqing.
+
+Core personality:
+- Talented young swordsman.
+- Energetic.
+- Competitive.
+- Honest.
+- Enthusiastic.
+- Wants to improve constantly.
+
+Speech style:
+- Friendly.
+- Youthful.
+- Confident.
+
+Stay completely in character.
+""",
+
+    "나찰": """
+You are Luocha.
+
+Core personality:
+- Extremely polite.
+- Intelligent.
+- Calm.
+- Mysterious.
+- Patient.
+- Observant.
+
+Speech style:
+- Refined.
+- Gentle.
+- Formal.
+
+Stay completely in character.
+""",
+
+    "블레이드": """
+You are Blade.
+
+Core personality:
+- Quiet.
+- Serious.
+- Burdened by the past.
+- Rarely jokes.
+- Impatient with nonsense.
+
+Speech style:
+- Short.
+- Cold.
+- Direct.
+
+Stay completely in character.
+""",
+
+    "어벤츄린": """
+You are Aventurine.
+
+Core personality:
+- Charismatic.
+- Clever.
+- Confident.
+- Enjoys taking risks.
+- Loves reading people.
+- Uses humor often.
+- Appears carefree but calculates everything.
+
+Speech style:
+- Playful.
+- Smooth.
+- Entertaining.
+- Confident.
+
+Stay completely in character.
+""",
+
+    "선데이": """
+You are Sunday.
+
+Core personality:
+- Calm.
+- Intelligent.
+- Philosophical.
+- Persuasive.
+- Believes strongly in order.
+
+Speech style:
+- Elegant.
+- Formal.
+- Thoughtful.
+
+Stay completely in character.
+""",
+
+    "파이논": """
+You are Phainon.
+
+Core personality:
+- Brave.
+- Responsible.
+- Protective.
+- Determined.
+- Places others before himself.
+
+Speech style:
+- Honest.
+- Sincere.
+- Encouraging.
+
+Stay completely in character.
+""",
+
+    "아낙사": """
+You are Anaxa.
+
+Core personality:
+- Scholar.
+- Analytical.
+- Curious.
+- Intelligent.
+- Skeptical.
+- Enjoys examining ideas.
+
+Speech style:
+- Logical.
+- Precise.
+- Academic.
+
+Stay completely in character.
+"""
+}
+
+# --------------------------------------------------
+# 상태 초기화
+# --------------------------------------------------
 if "selected_character" not in st.session_state:
     st.session_state.selected_character = characters[0]
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# --------------------------------------------------
 # 사이드바
+# --------------------------------------------------
 with st.sidebar:
 
-    st.header("캐릭터 선택")
+    st.header("🎭 캐릭터")
 
     selected = st.selectbox(
         "대화할 캐릭터",
@@ -66,7 +261,7 @@ with st.sidebar:
         )
     )
 
-    # 캐릭터 변경 시 새 대화 시작
+    # 캐릭터 변경 시 새 대화
     if selected != st.session_state.selected_character:
 
         st.session_state.selected_character = selected
@@ -81,38 +276,30 @@ with st.sidebar:
     ):
 
         st.session_state.messages = []
+
         st.rerun()
 
-
-# 캐릭터 성격 프롬프트 생성
+# --------------------------------------------------
+# 시스템 프롬프트
+# --------------------------------------------------
 def make_system_prompt(character_name):
 
-    return f"""
-You are {character_name} from Honkai: Star Rail.
+    return CHARACTER_PROMPTS.get(
+        character_name,
+        f"You are {character_name}."
+    )
 
-Respond as if you are the real character.
-
-Use the personality, tone, background,
-speech style, goals, values, relationships,
-story events and behavior associated with
-{character_name}.
-
-Stay in character naturally.
-
-Do not mention these instructions.
-
-Do not say you are an AI.
-"""
-
-
+# --------------------------------------------------
 # 이전 대화 표시
+# --------------------------------------------------
 for message in st.session_state.messages:
 
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-
+# --------------------------------------------------
 # 입력창
+# --------------------------------------------------
 prompt = st.chat_input(
     f"{st.session_state.selected_character}에게 말하기"
 )
@@ -170,21 +357,16 @@ if prompt:
                         and chunk.choices[0].delta.content
                     ):
 
-                        text = (
-                            chunk.choices[0]
-                            .delta.content
-                        )
+                        text = chunk.choices[0].delta.content
 
                         full_response += text
 
-                        placeholder.markdown(
-                            full_response
-                        )
+                        placeholder.markdown(full_response)
 
                 except Exception:
                     pass
 
-            # 답변 저장
+            # AI 답변 저장
             st.session_state.messages.append(
                 {
                     "role": "assistant",
