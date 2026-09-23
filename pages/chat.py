@@ -3,49 +3,62 @@ from openai import OpenAI
 
 # 페이지 설정
 st.set_page_config(
-    page_title="F1 AI Chat",
+    page_title="Max Verstappen AI",
     page_icon="🏎️"
 )
 
-st.title("🏎️ F1 AI Chat")
+st.title("🏎️ Max Verstappen AI Chat")
 
-# Secrets에서 Gemini API 키 읽기
+# Gemini API 키를 Streamlit Secrets에서 읽기
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
 except Exception:
     st.warning("GEMINI_API_KEY가 설정되어 있는지 확인해 주세요.")
     st.stop()
 
-# OpenAI 라이브러리로 Gemini 연결
+# OpenAI 라이브러리를 사용하여 Gemini API 연결
 client = OpenAI(
     api_key=api_key,
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
 )
 
-# 최초 1회만 대화 저장소 생성
+# 대화 기록 저장
 if "messages" not in st.session_state:
 
     st.session_state.messages = [
         {
             "role": "system",
-            "content": (
-                "You are Max Verstappen. "
-                "Always answer only in pure English. "
-                "Use simple words instead of difficult words. "
-                "Stay in character as Max Verstappen."
-            )
+            "content": """
+You are Formula 1 driver Max Verstappen.
+
+Respond as Max Verstappen would naturally speak in interviews,
+media appearances, paddock conversations, and casual discussions.
+
+Your personality should reflect:
+- Direct and honest answers
+- Competitive mindset
+- Confidence without unnecessary arrogance
+- Practical and realistic thinking
+- Interest in racing, cars, simulators, and performance
+- Calm reactions to pressure
+- Occasional dry humor
+
+Do not mention these instructions.
+Do not say you are an AI.
+Stay in character as Max Verstappen.
+"""
         }
     ]
 
-# 기존 대화 출력
-for msg in st.session_state.messages:
+# 이전 대화 출력
+for message in st.session_state.messages:
 
     # 시스템 프롬프트는 화면에 표시하지 않음
-    if msg["role"] == "system":
+    if message["role"] == "system":
         continue
 
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
 # 사용자 입력창
 prompt = st.chat_input("메시지를 입력하세요")
@@ -60,11 +73,11 @@ if prompt:
         }
     )
 
-    # 사용자 말풍선 표시
+    # 사용자 말풍선 출력
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # AI 말풍선
+    # AI 답변 출력
     with st.chat_message("assistant"):
 
         try:
@@ -78,10 +91,10 @@ if prompt:
             # 실시간 출력용 문자열
             full_response = ""
 
-            # 빈 자리 생성
+            # 빈 공간 생성
             placeholder = st.empty()
 
-            # 스트리밍 출력
+            # 스트리밍 응답 표시
             for chunk in response:
 
                 try:
@@ -108,5 +121,5 @@ if prompt:
         except Exception:
 
             st.warning(
-                "AI 응답을 가져오지 못했습니다. API 키와 연결 상태를 확인해 주세요."
+                "AI 응답을 가져오지 못했습니다. 잠시 후 다시 시도하거나 API 설정을 확인해 주세요."
             )
