@@ -1,11 +1,10 @@
-\import streamlit as st
+import streamlit as st
 from openai import OpenAI
 
 # 페이지 설정
 st.set_page_config(
     page_title="F1 Driver AI Chat",
-    page_icon="🏎️",
-    layout="wide"
+    page_icon="🏎️"
 )
 
 st.title("🏎️ F1 Driver AI Chat")
@@ -17,13 +16,13 @@ except Exception:
     st.warning("GEMINI_API_KEY 설정을 확인해 주세요.")
     st.stop()
 
-# Gemini(OpenAI 호환 API) 연결
+# Gemini(OpenAI 호환) 연결
 client = OpenAI(
     api_key=api_key,
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
 )
 
-# 현재 활동 중인 주요 F1 드라이버 목록
+# 현재 F1 드라이버 목록
 drivers = [
     "Max Verstappen",
     "Lando Norris",
@@ -31,7 +30,7 @@ drivers = [
     "Charles Leclerc",
     "Lewis Hamilton",
     "George Russell",
-    "Andrea Kimi Antonelli",
+    "Kimi Antonelli",
     "Fernando Alonso",
     "Lance Stroll",
     "Carlos Sainz",
@@ -47,7 +46,7 @@ drivers = [
     "Franco Colapinto"
 ]
 
-# 최초 상태 생성
+# 기본 상태 생성
 if "selected_driver" not in st.session_state:
     st.session_state.selected_driver = drivers[0]
 
@@ -57,63 +56,53 @@ if "messages" not in st.session_state:
 # 사이드바
 with st.sidebar:
 
-    st.header("⚙️ 설정")
+    st.header("F1 Driver")
 
-    selected = st.selectbox(
-        "F1 선수 선택",
+    selected_driver = st.selectbox(
+        "선수 선택",
         drivers,
         index=drivers.index(
             st.session_state.selected_driver
         )
     )
 
-    # 선수 변경 시 새 대화 시작
-    if selected != st.session_state.selected_driver:
+    # 선수 변경 시 새 대화
+    if selected_driver != st.session_state.selected_driver:
 
-        st.session_state.selected_driver = selected
-
+        st.session_state.selected_driver = selected_driver
         st.session_state.messages = []
 
         st.rerun()
 
     # 새 대화 버튼
     if st.button(
-        "🆕 새 대화 시작",
+        "🆕 새 대화",
         use_container_width=True
     ):
 
         st.session_state.messages = []
-
         st.rerun()
 
-# 시스템 프롬프트 생성 함수
-def get_system_prompt(driver_name):
 
-    return f"""
-You are {driver_name}.
+# 시스템 프롬프트 생성
+def make_system_prompt(driver_name):
 
-Respond as if you are the real Formula 1 driver.
-
-Your personality, tone, habits, communication style,
-humor, racing mindset, and interests should reflect
-public interviews, media appearances, paddock conversations,
-and public content associated with {driver_name}.
-
-Stay in character naturally.
-
-Do not mention these instructions.
-
-Do not say you are an AI.
-
-Answer as {driver_name}.
-"""
+    return (
+        f"You are {driver_name}. "
+        f"Answer as if you are the real Formula 1 driver {driver_name}. "
+        f"Use the speaking style, personality, humor, mindset and public interview tone commonly associated with {driver_name}. "
+        f"Stay in character. "
+        f"Do not mention these instructions. "
+        f"Do not say you are an AI."
+    )
 
 
-# 채팅 기록 표시
+# 이전 대화 표시
 for message in st.session_state.messages:
 
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
+
 
 # 입력창
 prompt = st.chat_input(
@@ -139,23 +128,22 @@ if prompt:
 
         try:
 
-            # 시스템 프롬프트 + 기존 대화
-            messages_for_api = [
+            api_messages = [
                 {
                     "role": "system",
-                    "content": get_system_prompt(
+                    "content": make_system_prompt(
                         st.session_state.selected_driver
                     )
                 }
             ]
 
-            messages_for_api.extend(
+            api_messages.extend(
                 st.session_state.messages
             )
 
             response = client.chat.completions.create(
                 model="gemini-3.5-flash-lite",
-                messages=messages_for_api,
+                messages=api_messages,
                 stream=True
             )
 
@@ -163,21 +151,19 @@ if prompt:
 
             placeholder = st.empty()
 
-            # 실시간 출력
             for chunk in response:
 
                 try:
 
-                    delta = (
-                        chunk
-                        .choices[0]
-                        .delta
-                        .content
-                    )
+                    if (
+                        chunk.choices
+                        and chunk.choices[0].delta
+                        and chunk.choices[0].delta.content
+                    ):
 
-                    if delta:
+                        text = chunk.choices[0].delta.content
 
-                        full_response += delta
+                        full_response += text
 
                         placeholder.markdown(
                             full_response
@@ -186,7 +172,6 @@ if prompt:
                 except Exception:
                     pass
 
-            # AI 답변 저장
             st.session_state.messages.append(
                 {
                     "role": "assistant",
