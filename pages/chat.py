@@ -1,54 +1,112 @@
 import streamlit as st
 from openai import OpenAI
 
-# 페이지 기본 설정 (이 파일만의 설정 — main.py에는 영향 없음)
-st.set_page_config(page_title="AI 정보 선생님", page_icon="🤖")
-st.title("🤖 AI 정보 선생님")
+# 페이지 설정
+st.set_page_config(
+    page_title="F1 AI Chat",
+    page_icon="🏎️"
+)
 
-# 비밀 금고(secrets)에서 API 키를 꺼내 접속 준비
+st.title("🏎️ F1 AI Chat")
+
+# Secrets에서 Gemini API 키 읽기
+try:
+    api_key = st.secrets["GEMINI_API_KEY"]
+except Exception:
+    st.warning("GEMINI_API_KEY가 설정되어 있는지 확인해 주세요.")
+    st.stop()
+
+# OpenAI 라이브러리로 Gemini 연결
 client = OpenAI(
-    api_key=st.secrets["GEMINI_API_KEY"],
-    base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    api_key=api_key,
+    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
 )
 
-# AI의 성격 (화면에는 띄우지 않고 요청에만 함께 보낸다)
-SYSTEM_PROMPT = (
-    "너는 중고등학생에게 설명하는 친절한 정보 선생님이야. "
-    "어려운 말은 쉬운 말로 바꿔 주고, 반드시 순수 한국어로만 답해"
-)
-
-# 대화 기록이 없으면 처음 한 번만 만들어 둔다
+# 최초 1회만 대화 저장소 생성
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-# 지금까지의 대화를 말풍선으로 다시 그리기 (성격 문장은 숨김)
+    st.session_state.messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are Max Verstappen. "
+                "Always answer only in pure English. "
+                "Use simple words instead of difficult words. "
+                "Stay in character as Max Verstappen."
+            )
+        }
+    ]
+
+# 기존 대화 출력
 for msg in st.session_state.messages:
-    if msg["role"] != "system":
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
 
-# 채팅 입력창
-user_input = st.chat_input("궁금한 것을 물어보세요!")
+    # 시스템 프롬프트는 화면에 표시하지 않음
+    if msg["role"] == "system":
+        continue
 
-if user_input:
-    # 보낸 말을 기록에 넣고 화면에도 그리기
-    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# 사용자 입력창
+prompt = st.chat_input("메시지를 입력하세요")
+
+if prompt:
+
+    # 사용자 메시지 저장
+    st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": prompt
+        }
+    )
+
+    # 사용자 말풍선 표시
     with st.chat_message("user"):
-        st.markdown(user_input)
+        st.markdown(prompt)
 
-    # AI 답 받아오기 (실패하면 빨간 오류 화면 대신 안내 문구)
+    # AI 말풍선
     with st.chat_message("assistant"):
+
         try:
-            stream = client.chat.completions.create(
-                model="gemini-3.5-flash-lite",       # 모델 이름은 그대로 유지
-                messages=st.session_state.messages,  # 대화 전체를 함께 보내 기억 유지
-                stream=True,                         # 글자가 실시간으로 흐르게
+
+            response = client.chat.completions.create(
+                model="gemini-3.5-flash-lite",
+                messages=st.session_state.messages,
+                stream=True
             )
-            answer = st.write_stream(
-                chunk.choices[0].delta.content or ""
-                for chunk in stream if chunk.choices
+
+            # 실시간 출력용 문자열
+            full_response = ""
+
+            # 빈 자리 생성
+            placeholder = st.empty()
+
+            # 스트리밍 출력
+            for chunk in response:
+
+                try:
+
+                    delta = chunk.choices[0].delta.content
+
+                    if delta:
+
+                        full_response += delta
+
+                        placeholder.markdown(full_response)
+
+                except Exception:
+                    pass
+
+            # AI 답변 저장
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": full_response
+                }
             )
-            # AI 답도 기록에 저장 (다음 질문에 이어서 사용)
-            st.session_state.messages.append({"role": "assistant", "content": answer})
+
         except Exception:
-            st.error("응답을 받지 못했습니다. 잠시 후 다시 보내 주세요.")
+
+            st.warning(
+                "AI 응답을 가져오지 못했습니다. API 키와 연결 상태를 확인해 주세요."
+            )
