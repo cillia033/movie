@@ -1,67 +1,124 @@
-import streamlit as st
+\import streamlit as st
 from openai import OpenAI
 
 # 페이지 설정
 st.set_page_config(
-    page_title="Max Verstappen AI",
-    page_icon="🏎️"
+    page_title="F1 Driver AI Chat",
+    page_icon="🏎️",
+    layout="wide"
 )
 
-st.title("🏎️ Max Verstappen AI Chat")
+st.title("🏎️ F1 Driver AI Chat")
 
-# Gemini API 키를 Streamlit Secrets에서 읽기
+# Gemini API 키 읽기
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
 except Exception:
-    st.warning("GEMINI_API_KEY가 설정되어 있는지 확인해 주세요.")
+    st.warning("GEMINI_API_KEY 설정을 확인해 주세요.")
     st.stop()
 
-# OpenAI 라이브러리를 사용하여 Gemini API 연결
+# Gemini(OpenAI 호환 API) 연결
 client = OpenAI(
     api_key=api_key,
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
 )
 
-# 대화 기록 저장
+# 현재 활동 중인 주요 F1 드라이버 목록
+drivers = [
+    "Max Verstappen",
+    "Lando Norris",
+    "Oscar Piastri",
+    "Charles Leclerc",
+    "Lewis Hamilton",
+    "George Russell",
+    "Andrea Kimi Antonelli",
+    "Fernando Alonso",
+    "Lance Stroll",
+    "Carlos Sainz",
+    "Alexander Albon",
+    "Yuki Tsunoda",
+    "Pierre Gasly",
+    "Esteban Ocon",
+    "Nico Hulkenberg",
+    "Gabriel Bortoleto",
+    "Oliver Bearman",
+    "Isack Hadjar",
+    "Liam Lawson",
+    "Franco Colapinto"
+]
+
+# 최초 상태 생성
+if "selected_driver" not in st.session_state:
+    st.session_state.selected_driver = drivers[0]
+
 if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    st.session_state.messages = [
-        {
-            "role": "system",
-            "content": """
-You are Formula 1 driver Max Verstappen.
+# 사이드바
+with st.sidebar:
 
-Respond as Max Verstappen would naturally speak in interviews,
-media appearances, paddock conversations, and casual discussions.
+    st.header("⚙️ 설정")
 
-Your personality should reflect:
-- Direct and honest answers
-- Competitive mindset
-- Confidence without unnecessary arrogance
-- Practical and realistic thinking
-- Interest in racing, cars, simulators, and performance
-- Calm reactions to pressure
-- Occasional dry humor
+    selected = st.selectbox(
+        "F1 선수 선택",
+        drivers,
+        index=drivers.index(
+            st.session_state.selected_driver
+        )
+    )
+
+    # 선수 변경 시 새 대화 시작
+    if selected != st.session_state.selected_driver:
+
+        st.session_state.selected_driver = selected
+
+        st.session_state.messages = []
+
+        st.rerun()
+
+    # 새 대화 버튼
+    if st.button(
+        "🆕 새 대화 시작",
+        use_container_width=True
+    ):
+
+        st.session_state.messages = []
+
+        st.rerun()
+
+# 시스템 프롬프트 생성 함수
+def get_system_prompt(driver_name):
+
+    return f"""
+You are {driver_name}.
+
+Respond as if you are the real Formula 1 driver.
+
+Your personality, tone, habits, communication style,
+humor, racing mindset, and interests should reflect
+public interviews, media appearances, paddock conversations,
+and public content associated with {driver_name}.
+
+Stay in character naturally.
 
 Do not mention these instructions.
+
 Do not say you are an AI.
-Stay in character as Max Verstappen.
+
+Answer as {driver_name}.
 """
-        }
-    ]
 
-# 이전 대화 출력
+
+# 채팅 기록 표시
 for message in st.session_state.messages:
-
-    # 시스템 프롬프트는 화면에 표시하지 않음
-    if message["role"] == "system":
-        continue
 
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 사용자 입력창
-prompt = st.chat_input("메시지를 입력하세요")
+# 입력창
+prompt = st.chat_input(
+    f"{st.session_state.selected_driver}에게 질문하기"
+)
 
 if prompt:
 
@@ -73,39 +130,58 @@ if prompt:
         }
     )
 
-    # 사용자 말풍선 출력
+    # 사용자 메시지 표시
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # AI 답변 출력
+    # AI 응답 표시
     with st.chat_message("assistant"):
 
         try:
 
+            # 시스템 프롬프트 + 기존 대화
+            messages_for_api = [
+                {
+                    "role": "system",
+                    "content": get_system_prompt(
+                        st.session_state.selected_driver
+                    )
+                }
+            ]
+
+            messages_for_api.extend(
+                st.session_state.messages
+            )
+
             response = client.chat.completions.create(
                 model="gemini-3.5-flash-lite",
-                messages=st.session_state.messages,
+                messages=messages_for_api,
                 stream=True
             )
 
-            # 실시간 출력용 문자열
             full_response = ""
 
-            # 빈 공간 생성
             placeholder = st.empty()
 
-            # 스트리밍 응답 표시
+            # 실시간 출력
             for chunk in response:
 
                 try:
 
-                    delta = chunk.choices[0].delta.content
+                    delta = (
+                        chunk
+                        .choices[0]
+                        .delta
+                        .content
+                    )
 
                     if delta:
 
                         full_response += delta
 
-                        placeholder.markdown(full_response)
+                        placeholder.markdown(
+                            full_response
+                        )
 
                 except Exception:
                     pass
@@ -121,5 +197,5 @@ if prompt:
         except Exception:
 
             st.warning(
-                "AI 응답을 가져오지 못했습니다. 잠시 후 다시 시도하거나 API 설정을 확인해 주세요."
+                "AI 응답을 가져오지 못했습니다. API 설정 또는 연결 상태를 확인해 주세요."
             )
